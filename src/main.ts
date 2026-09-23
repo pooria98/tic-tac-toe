@@ -21,11 +21,7 @@ const gameStatusElement = document.querySelector(
 ) as HTMLParagraphElement;
 const cells = document.querySelectorAll(".cell") as NodeListOf<HTMLDivElement>;
 
-gsap.from([pvpButton, pvcButton], {
-  scale: 0,
-  duration: 0.8,
-  ease: "elastic",
-});
+showGameModeScreen();
 
 let players: Player[] = [];
 let currentPlayerIndex: 0 | 1 = 0;
@@ -39,7 +35,7 @@ pvpButton.addEventListener("click", () => {
   gameMode = "pvp";
   isGameOver = false;
   gameStatusElement.textContent = players[currentPlayerIndex]?.name + "'s turn";
-  gameModeScreen.style.display = "none";
+  hideGameModeScreen("pvp");
 });
 
 pvcButton.addEventListener("click", () => {
@@ -49,7 +45,7 @@ pvcButton.addEventListener("click", () => {
   gameMode = "pvc";
   isGameOver = false;
   gameStatusElement.textContent = players[currentPlayerIndex]?.name + "'s turn";
-  gameModeScreen.style.display = "none";
+  hideGameModeScreen("pvc");
 });
 
 cells.forEach((cell, index) => {
@@ -67,10 +63,15 @@ cells.forEach((cell, index) => {
     gameStatusElement.textContent =
       players[currentPlayerIndex]?.name + "'s turn";
 
-    const winner = getWinner();
+    const { winner, winnerCellsIndices } = getWinner();
 
     if (winner !== null) {
       gameStatusElement.textContent = `${winner.name} won!`;
+      cells.forEach((cell, index) => {
+        if (winnerCellsIndices.includes(index)) {
+          gsap.to(cell, { backgroundColor: "rgba(180,250,200)" });
+        }
+      });
       isGameOver = true;
     }
 
@@ -87,9 +88,14 @@ cells.forEach((cell, index) => {
       currentPlayerIndex = currentPlayerIndex === 0 ? 1 : 0;
       gameStatusElement.textContent =
         players[currentPlayerIndex]?.name + "'s turn";
-      const winner = getWinner();
+      const { winner, winnerCellsIndices } = getWinner();
       if (winner !== null) {
         gameStatusElement.textContent = `${winner.name} won!`;
+        cells.forEach((cell, index) => {
+          if (winnerCellsIndices.includes(index)) {
+            gsap.to(cell, { backgroundColor: "rgba(180,250,200)" });
+          }
+        });
         isGameOver = true;
       }
       if (isBoardFull()) {
@@ -102,25 +108,11 @@ cells.forEach((cell, index) => {
   });
 });
 
-restartButton.addEventListener("click", () => {
-  cells.forEach((cell) => {
-    cell.textContent = "";
-  });
-  currentPlayerIndex = 0;
-  gameStatusElement.textContent = players[currentPlayerIndex]?.name + "'s turn";
-  isGameOver = false;
-});
+restartButton.addEventListener("click", restartCurrentMode);
 
 selectGameModeButton.addEventListener("click", () => {
-  cells.forEach((cell) => {
-    cell.textContent = "";
-  });
-  players = [];
-  currentPlayerIndex = 0;
-  gameMode = undefined;
-  isGameOver = true;
-  gameStatusElement.textContent = "";
-  gameModeScreen.style.display = "flex";
+  resetGame();
+  showGameModeScreen();
 });
 
 const winningCombinations: Array<[number, number, number]> = [
@@ -139,7 +131,10 @@ function isBoardFull() {
   return cellsArray.every((cell) => cell.textContent !== "");
 }
 
-function getWinner(): Player | null {
+function getWinner(): {
+  winner: Player | null;
+  winnerCellsIndices: [number, number, number];
+} {
   for (const combination of winningCombinations) {
     const [a, b, c] = combination;
     if (
@@ -148,16 +143,18 @@ function getWinner(): Player | null {
       cells[a]?.textContent === cells[c]?.textContent
     ) {
       let winner: Player | null = null;
+      let winnerCellsIndices: [number, number, number] = combination;
       players.forEach((player) => {
         if (player.symbol === cells[a]?.textContent) {
           winner = player;
         }
       });
-      return winner;
+
+      return { winner, winnerCellsIndices };
     }
   }
 
-  return null;
+  return { winner: null, winnerCellsIndices: [0, 0, 0] };
 }
 
 function getBoard(): Array<"X" | "O" | ""> {
@@ -179,12 +176,7 @@ function checkBoardWinner(
   return board.every((value) => value !== "") ? "draw" : null;
 }
 
-/**
- * Minimax algorithm. The computer ("O") is the maximizing player and the
- * human ("X") is the minimizing player. Depth is subtracted from / added to
- * the score so the computer prefers winning as fast as possible and losing
- * as slowly as possible.
- */
+// Minimax algorithm
 function minimax(
   board: Array<"X" | "O" | "">,
   isMaximizing: boolean,
@@ -234,4 +226,56 @@ function getBestMove(): number {
   });
 
   return bestMoveIndex;
+}
+
+function hideGameModeScreen(selectedMode: "pvp" | "pvc") {
+  if (selectedMode === "pvp") {
+    gsap.to(pvpButton, { scale: 1.05 });
+    gsap.to(pvcButton, { y: 100, autoAlpha: 0 });
+    gsap.to(gameModeScreen, {
+      autoAlpha: 0,
+      display: "none",
+      delay: 0.8,
+    });
+  } else {
+    gsap.to(pvcButton, { scale: 1.05 });
+    gsap.to(pvpButton, { y: 100, autoAlpha: 0 });
+    gsap.to(gameModeScreen, {
+      autoAlpha: 0,
+      display: "none",
+      delay: 0.8,
+    });
+  }
+}
+
+function showGameModeScreen() {
+  gsap.set([pvpButton, pvcButton], { scale: 0.4, y: 0, autoAlpha: 1 });
+  gsap.to([pvpButton, pvcButton], { scale: 1, duration: 0.8, ease: "elastic" });
+  gsap.to(gameModeScreen, {
+    autoAlpha: 1,
+    display: "flex",
+  });
+}
+
+function resetGame() {
+  players = [];
+  currentPlayerIndex = 0;
+  gameMode = undefined;
+  isGameOver = true;
+  gsap.killTweensOf(cells);
+  cells.forEach((cell) => {
+    cell.textContent = "";
+    gsap.set(cell, { clearProps: "backgroundColor" });
+  });
+}
+
+function restartCurrentMode() {
+  gsap.killTweensOf(cells);
+  cells.forEach((cell) => {
+    cell.textContent = "";
+    gsap.set(cell, { clearProps: "backgroundColor" });
+  });
+  currentPlayerIndex = 0;
+  gameStatusElement.textContent = players[currentPlayerIndex]?.name + "'s turn";
+  isGameOver = false;
 }
